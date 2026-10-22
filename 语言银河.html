@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>语言银河 · 点亮</title>
+<style>
+  :root{
+    --ink:#dfe9ff; --dim:#7e8bb0; --glass:rgba(14,20,40,.55);
+    --line:rgba(120,160,255,.25);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:radial-gradient(ellipse at 50% 38%, #0b1430 0%, #060a18 42%, #020308 100%);overflow:hidden;
+    font-family:"PingFang SC","Microsoft YaHei",-apple-system,system-ui,sans-serif;
+    color:var(--ink);cursor:grab;}
+  body.drag{cursor:grabbing}
+  #scene{position:fixed;inset:0;display:block}
+  /* 词标签 */
+  #labels{position:fixed;inset:0;pointer-events:none}
+  .lab{position:absolute;left:0;top:0;pointer-events:auto;cursor:pointer;
+    font-size:13px;letter-spacing:.5px;white-space:nowrap;
+    color:rgba(223,233,255,.82);
+    text-shadow:0 0 8px rgba(120,170,255,.7),
+      0 1px 3px rgba(0,0,0,.98),0 -1px 3px rgba(0,0,0,.98),
+      1px 0 3px rgba(0,0,0,.98),-1px 0 3px rgba(0,0,0,.98);
+    transition:color .2s,text-shadow .2s,font-size .2s;user-select:none}
+  .lab:hover,.lab.on{color:#fff;font-size:17px;font-weight:600;
+    text-shadow:0 0 18px rgba(180,215,255,1),0 0 6px rgba(255,255,255,1),0 0 28px rgba(120,180,255,.95)}
+  /* 顶部提示 */
+  #hint{position:fixed;top:18px;left:50%;transform:translateX(-50%);
+    font-size:12.5px;color:var(--dim);letter-spacing:1px;text-align:center;
+    text-shadow:0 0 10px rgba(0,0,0,.8);pointer-events:none}
+  #hint b{color:#a9c4ff;font-weight:600}
+  /* 标题 */
+  #title{position:fixed;top:16px;left:20px;font-size:15px;letter-spacing:3px;
+    color:#bcd2ff;text-shadow:0 0 16px rgba(120,170,255,.6)}
+  #title small{display:block;font-size:10px;letter-spacing:2px;color:var(--dim);margin-top:3px}
+  /* 详情面板 */
+  /* 卡片移到左上角（标题下方）：视线区完整留给星星，不再压住焦点 */
+  #panel{position:fixed;top:64px;left:20px;transform:translateX(-18px);
+    width:286px;padding:20px 20px 18px;background:rgba(11,17,36,.46);
+    border:1px solid rgba(140,180,255,.24);border-radius:16px;
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    box-shadow:0 0 40px rgba(60,110,255,.14),inset 0 0 30px rgba(80,140,255,.05);
+    opacity:0;pointer-events:none;transition:opacity .35s,transform .35s}
+  #panel.show{opacity:1;pointer-events:auto;transform:translateX(0)}
+  #panel .fam{font-size:11px;letter-spacing:2px;color:#8fb0ff;margin-bottom:10px}
+  #panel .word{font-size:30px;font-weight:600;letter-spacing:.5px;
+    text-shadow:0 0 22px rgba(150,200,255,.6)}
+  #panel .ph{font-size:13px;color:#9fb6e6;margin:4px 0 14px;font-style:italic}
+  #panel .cn{font-size:15px;line-height:1.6;color:#e8eeff;margin-bottom:14px}
+  #panel .meta{font-size:11.5px;color:var(--dim);line-height:1.7;
+    border-top:1px solid rgba(140,180,255,.16);padding-top:12px}
+  #panel .meta b{color:#bcd2ff;font-weight:600}
+  /* 学习层：同根词族成员列表——点中一词，顺着词根游览同族 */
+  #panel .famlist{display:none;margin-top:14px;padding-top:12px;border-top:1px solid rgba(140,180,255,.16);flex-wrap:wrap;gap:6px}
+  #panel .famlist.show{display:flex}
+  #panel .famlist .ttl{width:100%;font-size:11px;letter-spacing:1px;color:#8fb0ff;margin-bottom:5px;user-select:none}
+  #panel .famchips{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+  #panel .chip{font-size:12px;padding:3px 9px;border-radius:20px;border:1px solid rgba(140,180,255,.3);color:#cfe0ff;cursor:pointer;transition:.2s;user-select:none}
+  #panel .chip:hover{background:rgba(140,180,255,.18);color:#fff;border-color:#fff}
+  #panel .more{font-size:11px;color:var(--dim);align-self:center;padding-left:4px}
+  #panel .close{position:absolute;top:14px;right:16px;width:22px;height:22px;
+    border-radius:50%;border:1px solid rgba(140,180,255,.3);color:#9fb6e6;
+    font-size:13px;line-height:20px;text-align:center;cursor:pointer;
+    transition:.2s}
+  #panel .close:hover{color:#fff;border-color:#fff;background:rgba(140,180,255,.15)}
+  /* 近邻模式：选中后整屏只呈现这颗星与它的真实近邻（单词才看得清，手机尤其如此） */
+  #focus{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .3s;
+    box-shadow:inset 0 0 140px rgba(60,110,255,.13)}
+  #focus.show{opacity:1}
+  /* 天区坐标常驻：地图的经纬度 = 星图的赤经赤纬，回答"我在哪一片天区" */
+  #coord{position:fixed;top:18px;right:20px;font-size:11px;letter-spacing:1.2px;
+    color:var(--dim);text-shadow:0 0 10px rgba(0,0,0,.85);pointer-events:none;
+    font-variant-numeric:tabular-nums;z-index:3}
+  #focus::after{content:attr(data-tip);position:absolute;
+    left:50%;bottom:24px;transform:translateX(-50%);white-space:nowrap;
+    font-size:11.5px;letter-spacing:1px;color:var(--dim);
+    text-shadow:0 0 10px rgba(0,0,0,.85)}
+  /* 近邻模式下字号放大到可读 */
+  #labels.closeup .lab{font-size:21px}
+  #labels.closeup .lab.on{font-size:25px}
+  @media (max-width:640px){
+    #labels.closeup .lab{font-size:26px}
+    #labels.closeup .lab.on{font-size:30px}
+    #panel{left:12px;right:12px;top:auto;bottom:12px;width:auto;
+      transform:translateY(20px);padding:16px 16px 14px}
+    #panel.show{transform:translateY(0)}
+    #panel .word{font-size:26px}
+    #legend{display:none}
+    #focus::after{font-size:10.5px;bottom:16px}
+  }
+  /* 图例 */
+  #legend{position:fixed;bottom:18px;left:20px;font-size:11px;color:var(--dim);
+    line-height:1.9;max-width:260px}
+  #legend .row{display:flex;align-items:center;gap:8px}
+  #legend .dot{width:8px;height:8px;border-radius:50%;flex:none;
+    box-shadow:0 0 8px currentColor}
+  #legend b{color:#a9c4ff;font-weight:500}
+  /* 数据来源 / 关于 */
+  #aboutBtn{position:fixed;bottom:18px;right:20px;font-size:11px;letter-spacing:1px;
+    color:var(--dim);border:1px solid rgba(140,180,255,.25);border-radius:20px;
+    padding:6px 13px;cursor:pointer;background:rgba(14,20,40,.4);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:.2s;user-select:none}
+  #aboutBtn:hover{color:#cfe0ff;border-color:rgba(140,180,255,.5)}
+  /* 手气不错：随机漂流入口（PRD §4.9）。随机不是推荐——它不猜你想去哪，只把骰子递给你 */
+  #luckyBtn{position:fixed;bottom:18px;right:132px;font-size:11px;letter-spacing:1px;
+    color:var(--dim);border:1px solid rgba(140,180,255,.25);border-radius:20px;
+    padding:6px 13px;cursor:pointer;background:rgba(14,20,40,.4);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:.2s;user-select:none}
+  #luckyBtn:hover{color:#ffe9b8;border-color:rgba(255,214,140,.5);text-shadow:0 0 12px rgba(255,220,150,.6)}
+  #about{position:fixed;bottom:58px;right:20px;width:284px;padding:18px 18px 16px;
+    background:var(--glass);border:1px solid rgba(140,180,255,.28);border-radius:16px;
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    box-shadow:0 0 30px rgba(60,110,255,.18);opacity:0;pointer-events:none;
+    transform:translateY(10px);transition:.3s;z-index:5}
+  #about.show{opacity:1;pointer-events:auto;transform:translateY(0)}
+  #about .hd{font-size:14px;letter-spacing:2px;color:#bcd2ff;margin-bottom:6px}
+  #about .sub{font-size:11px;color:var(--dim);line-height:1.5;margin-bottom:14px}
+  #about .src{font-size:11.5px;color:#cdd9f5;line-height:2}
+  #about .src b{color:#8fb0ff;font-weight:600;display:inline-block;width:64px}
+  #about .src span{color:#9fb6e6}
+  #about .close{position:absolute;top:12px;right:14px;width:20px;height:20px;border-radius:50%;
+    border:1px solid rgba(140,180,255,.3);color:#9fb6e6;font-size:12px;line-height:18px;
+    text-align:center;cursor:pointer;transition:.2s}
+  #about .close:hover{color:#fff;border-color:#fff;background:rgba(140,180,255,.15)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="labels"></div>
+<div id="title">语言银河<small>LINGO · GALAXY OF WORDS</small></div>
+<div id="hint">你即地球 · 拖动旋转 · 点击亮星 <b>抵达一个词</b></div>
+<div id="panel">
+  <div class="fam" id="pFam"></div>
+  <div class="word" id="pWord"></div>
+  <div class="ph" id="pPh"></div>
+  <div class="cn" id="pCn"></div>
+  <div class="meta" id="pMeta"></div>
+  <div class="famlist" id="pFamList"></div>
+</div>
+<div id="focus"></div>
+<div id="coord"></div>
+<div id="legend"></div>
+<div id="luckyBtn">手气不错</div>
+<div id="aboutBtn">ⓘ 数据来源</div>
+<div id="about">
+  <div class="close" id="aClose">✕</div>
+  <div class="hd">语言银河 · 演示原型</div>
+  <div class="sub">单词挂在真实亮星上 · 同根词族点亮真实星座</div>
+  <div class="src"><b>星表</b> HYG Database v42 — <span>CC BY-SA 4.0</span></div>
+  <div class="src"><b>词库</b> ECDICT + WordNet — <span>免费可商用</span></div>
+  <div class="src"><b>渲染</b> Three.js — <span>MIT License</span></div>
+</div>
+
+<script src="./three.min.js"></script>
+<script src="./word-data.js"></script>
+<script src="./hyg-stars.js"></script>
+<script src="./galaxy-stars.js"></script>
+<script>
+// ---------- 真实亮星目录（RA 小时 / Dec 度 / 星等 / 光谱型 / 星座键 / 单词） ----------
+// 每座星座承载一个词族，星座连线即「词源维度」。
+let FAM = {
+  cyg:{cn:'天鹅座', root:'form · 形态'},  cas:{cn:'仙后座', root:'struct · 构建'},
+  cma:{cn:'大犬座', root:'dict · 言说'},  leo:{cn:'狮子座', root:'lect · 读/采'},
+  boo:{cn:'牧夫座', root:'rupt · 破'},    uma:{cn:'大熊座', root:'port · 搬运'},
+  sco:{cn:'天蝎座', root:'pos · 放置'},   aur:{cn:'御夫座', root:'cap · 取/容'},
+  peg:{cn:'飞马座', root:'tract · 拉'},    ori:{cn:'猎户座', root:'spect · 看'},
+  gem:{cn:'双子座', root:'ject · 投'},    cru:{cn:'南十字', root:'script · 写'},
+  lyr:{cn:'天琴座', root:'vis · 见'}
+};
+let FAMCOL = {
+  cyg:0x6fd3ff, cas:0xb69cff, cma:0xffd27f, leo:0xff9bb0, boo:0x9fffcf,
+  uma:0x7fb0ff, sco:0xff8a6b, aur:0xffe6a3, peg:0xc0a0ff, ori:0x8fe9ff,
+  gem:0xa0ffe0, cru:0xffc0e0, lyr:0xbfe0ff
+};
+let STARS = [
+  // cyg  13 words
+  ['Deneb',20.691,45.28,1.25,'A2Ia','cyg','information'],
+  ['Sadr',20.370,40.26,2.23,'F8Ib','cyg','form'],
+  ['Aljanah',20.770,33.97,2.48,'K0III','cyg','inform'],
+  ['Fawaris',19.750,45.13,2.86,'B9.5III','cyg','formal'],
+  ['Albireo',19.512,27.96,3.05,'K3II+...','cyg','formation'],
+  ['',21.216,30.23,3.21,'G8II SB','cyg','formula'],
+  ['',21.082,43.93,3.72,'K5Ibv SB','cyg','format'],
+  ['',21.247,38.05,3.74,'F1IV','cyg','conform'],
+  ['',19.495,51.73,3.76,'A5Vn','cyg','reform'],
+  ['',19.285,53.37,3.80,'K0III','cyg','transform'],
+  ['',20.227,46.74,3.80,'K2II+...','cyg','uniform'],
+  ['',19.938,35.08,3.89,'K0IIIvar','cyg','perform'],
+  ['',20.953,41.17,3.94,'A1Vn','cyg','deform'],
+  // cas  10 words
+  ['Cih',0.945,60.72,2.15,'B0IV:evar','cas','construction'],
+  ['Schedar',0.675,56.54,2.24,'K0II-IIIvar','cas','destroy'],
+  ['Caph',0.153,59.15,2.28,'F2III-IV','cas','construct'],
+  ['Ruchbah',1.430,60.24,2.66,'A5Vv SB','cas','infrastructure'],
+  ['Segin',1.907,63.67,3.35,'B2pvar','cas','instruct'],
+  ['Achird',0.818,57.82,3.46,'G0V SB','cas','obstruct'],
+  ['Fulu',0.616,53.90,3.69,'B2IV','cas','destruct'],
+  ['',2.057,72.42,3.95,'A2V','cas','structure'],
+  ['',0.550,62.93,4.17,'B1Ia','cas','obstruction'],
+  ['',1.185,55.15,4.34,'A7Vvar','cas','reconstruct'],
+  // cma  12 words
+  ['Sirius',6.752,-16.72,-1.44,'A0m...','cma','indicate'],
+  ['Adhara',6.977,-28.97,1.50,'B2II','cma','dedicate'],
+  ['Wezen',7.140,-26.39,1.83,'F8Ia','cma','dictate'],
+  ['Mirzam',6.378,-17.96,1.98,'B1II/III','cma','addict'],
+  ['Aludra',7.402,-29.30,2.45,'B5Ia','cma','contradict'],
+  ['Furud',6.339,-30.06,3.02,'B2.5V','cma','dictionary'],
+  ['',7.050,-23.83,3.02,'B3Ia','cma','dictation'],
+  ['Nganurganity',7.029,-27.93,3.49,'K4III','cma','predict'],
+  ['',6.831,-32.51,3.50,'B1.5IVne','cma','verdict'],
+  ['',6.902,-24.18,3.89,'K3Iab','cma','edict'],
+  ['',6.611,-19.26,3.95,'K1III+...','cma','jurisdiction'],
+  ['',7.247,-26.77,4.01,'B2IV/Ve','cma','dictator'],
+  // leo  13 words
+  ['Regulus',10.140,11.97,1.36,'B7V','leo','collect'],
+  ['Algieba',10.333,19.84,2.01,'K0III','leo','elect'],
+  ['Denebola',11.818,14.57,2.14,'A3Vvar','leo','legend'],
+  ['Zosma',11.235,20.52,2.56,'A4V','leo','lecture'],
+  ['Ras Elased Australis',9.764,23.77,2.97,'G0II','leo','neglect'],
+  ['Chertan',11.237,15.43,3.33,'A2V','leo','select'],
+  ['Adhafera',10.278,23.42,3.43,'F0III','leo','reflect'],
+  ['',10.122,16.76,3.48,'A0Ib','leo','dialect'],
+  ['Subra',9.686,9.89,3.52,'A5V+...','leo','legal'],
+  ['Shaomin',10.547,9.31,3.84,'B1Ib SB','leo','delegate'],
+  ['Rasalas',9.879,26.01,3.88,'K0III','leo','recollect'],
+  ['',11.399,10.53,4.00,'F2IV SB','leo','selection'],
+  ['',11.352,6.03,4.05,'B9.5Vs','leo','election'],
+  // boo  8 words
+  ['Arcturus',14.261,19.18,-0.05,'K2IIIp','boo','interrupt'],
+  ['Izar',14.750,27.07,2.35,'A0','boo','erupt'],
+  ['Muphrid',13.911,18.40,2.68,'G0IV','boo','disrupt'],
+  ['Seginus',14.535,38.31,3.04,'A7IIIvar','boo','corrupt'],
+  ['',15.258,33.31,3.46,'G8III','boo','abrupt'],
+  ['Nekkar',15.032,40.39,3.49,'G8III','boo','bankrupt'],
+  ['',14.530,30.37,3.57,'K3III','boo','rupture'],
+  ['',14.686,13.73,3.78,'A3IVn','boo','eruption'],
+  // uma  12 words
+  ['Alioth',12.900,55.96,1.76,'A0p','uma','important'],
+  ['Dubhe',11.062,61.75,1.81,'F7V comp','uma','importance'],
+  ['Alkaid',13.792,49.31,1.85,'B3V SB','uma','export'],
+  ['Mizar',13.399,54.93,2.23,'A2V','uma','import'],
+  ['Merak',11.031,56.38,2.34,'A1V','uma','portable'],
+  ['Phecda',11.897,53.69,2.41,'A0V SB','uma','report'],
+  ['',11.161,44.50,3.00,'K1III','uma','support'],
+  ['Tania Australis',10.372,41.50,3.06,'M0III SB','uma','transport'],
+  ['Talitha',8.987,48.04,3.12,'A7IV','uma','passport'],
+  ['',9.548,51.68,3.17,'F6IV','uma','portfolio'],
+  ['Megrez',12.257,57.03,3.32,'A3Vvar','uma','deport'],
+  ['Muscida',8.504,60.72,3.35,'G4II-III','uma','portion'],
+  // sco  14 words
+  ['Antares',16.490,-26.43,1.06,'M1Ib + B2.5V','sco','component'],
+  ['Shaula',17.560,-37.10,1.62,'B1.5IV+...','sco','oppose'],
+  ['Sargas',17.622,-43.00,1.86,'F1II','sco','expose'],
+  ['Dschubba',16.006,-22.62,2.29,'B0.2IV','sco','impose'],
+  ['Larawag',16.836,-34.29,2.29,'K2IIIb','sco','compose'],
+  ['',17.708,-39.03,2.39,'B1.5III','sco','deposit'],
+  ['Acrab',16.091,-19.81,2.56,'B0.5V','sco','dispose'],
+  ['Lesath',17.513,-37.30,2.70,'B2IV','sco','position'],
+  ['Paikauhale',16.598,-28.22,2.82,'B0V','sco','pose'],
+  ['Fang',15.981,-26.11,2.89,'B1V + B2V','sco','propose'],
+  ['Alniyat',16.353,-25.59,2.90,'B1III','sco','purpose'],
+  ['',17.793,-40.13,2.99,'F3Ia','sco','postpone'],
+  ['Xamidimura',16.865,-38.05,3.00,'B1.5IV + B','sco','opponent'],
+  ['Fuyue',17.831,-37.04,3.19,'K0/K1III','sco','suppose'],
+  // aur  10 words
+  ['Capella',5.278,46.00,0.08,'M1: comp','aur','accept'],
+  ['',5.278,46.00,0.96,'G0 III','aur','concept'],
+  ['Menkalinan',5.992,44.95,1.90,'A2V','aur','capture'],
+  ['Mahasim',5.995,37.21,2.65,'A0p Si','aur','capacity'],
+  ['Hassaleh',4.950,33.17,2.69,'K3IIvar','aur','except'],
+  ['Almaaz',5.033,43.82,3.03,'F0Ia','aur','capable'],
+  ['Haedus',5.109,41.23,3.18,'B3V','aur','conception'],
+  ['Saclateni',5.041,41.08,3.69,'K4II comp','aur','deception'],
+  ['',5.992,54.28,3.72,'K0III','aur','perception'],
+  ['',5.858,39.15,3.97,'K0III','aur','receipt'],
+  // peg  9 words
+  ['Enif',21.736,9.88,2.38,'K2Ibvar','peg','contract'],
+  ['Scheat',23.063,28.08,2.44,'M2II-IIIvar','peg','attract'],
+  ['Markab',23.079,15.21,2.49,'B9.5III','peg','abstract'],
+  ['Algenib',0.221,15.18,2.83,'B2IV','peg','distract'],
+  ['Matar',22.717,30.22,2.93,'G2II-III..','peg','extract'],
+  ['Homam',22.691,10.83,3.41,'B8.5V','peg','tractor'],
+  ['Sadalbari',22.833,24.60,3.51,'M2III','peg','retract'],
+  ['Biham',22.170,6.20,3.52,'A2V','peg','subtract'],
+  ['',22.117,25.35,3.77,'F5V','peg','traction'],
+  // ori  10 words
+  ['Rigel',5.242,-8.20,0.18,'B8Ia','ori','expect'],
+  ['Betelgeuse',5.920,7.41,0.45,'M2Ib','ori','aspect'],
+  ['Bellatrix',5.419,6.35,1.64,'B2III','ori','inspect'],
+  ['Alnilam',5.604,-1.20,1.69,'B0Ia','ori','respect'],
+  ['Alnitak',5.679,-1.94,1.74,'O9.5Ib SB','ori','prospect'],
+  ['Saiph',5.796,-9.67,2.07,'B0.5Iavar','ori','suspect'],
+  ['Mintaka',5.533,-0.30,2.25,'O9.5II','ori','perspective'],
+  ['Hatysa',5.591,-5.91,2.75,'O9III','ori','spectacle'],
+  ['Tabit',4.831,6.96,3.19,'F6V','ori','spectator'],
+  ['',5.408,-2.40,3.35,'B1V + B2','ori','retrospect'],
+  // gem  9 words
+  ['Pollux',7.755,28.03,1.16,'K0IIIvar','gem','object'],
+  ['Castor',7.577,31.89,1.58,'A2Vm','gem','inject'],
+  ['Alhena',6.629,16.40,1.93,'A0IV','gem','eject'],
+  ['Castor B',7.577,31.89,2.85,'A m','gem','reject'],
+  ['Tejat',6.383,22.51,2.87,'M3IIIvar','gem','project'],
+  ['Mebsuta',6.732,25.13,3.06,'A3mA6-A9','gem','subject'],
+  ['Propus',6.248,22.51,3.31,'M3III','gem','adjective'],
+  ['Alzirr',6.755,12.90,3.35,'F5IV','gem','trajectory'],
+  ['Wasat',7.335,21.98,3.50,'F0IV...','gem','rejection'],
+  // cru  9 words
+  ['Acrux',12.443,-63.10,0.77,'B0.5IV','cru','describe'],
+  ['Mimosa',12.795,-59.69,1.25,'B0.5III','cru','manuscript'],
+  ['Gacrux',12.519,-57.11,1.59,'M4III','cru','script'],
+  ['Imai',12.252,-58.75,2.79,'B2IV','cru','prescribe'],
+  ['Ginan',12.356,-60.40,3.59,'K3/K4III','cru','subscribe'],
+  ['',12.910,-57.18,4.03,'B2IV-V','cru','inscribe'],
+  ['',12.307,-64.00,4.06,'B2.5V','cru','scribble'],
+  ['',12.115,-64.61,4.14,'F2III','cru','scripture'],
+  ['',12.050,-63.31,4.32,'Am','cru','transcribe'],
+  // lyr  12 words
+  ['Vega',18.616,38.78,0.03,'A0Vvar','lyr','individual'],
+  ['Sulafat',18.982,32.69,3.25,'B9III','lyr','evident'],
+  ['Sheliak',18.835,33.36,3.52,'A8:V comp SB','lyr','visible'],
+  ['',18.922,43.95,4.08,'M5IIIvar','lyr','vision'],
+  ['',18.908,36.90,4.22,'M4IIvar','lyr','visit'],
+  ['',18.331,36.06,4.33,'K2IIIvar','lyr','visual'],
+  ['',18.746,37.61,4.34,'Am','lyr','video'],
+  ['',19.273,38.13,4.35,'K0II','lyr','provide'],
+  ['Aladfar',19.229,39.15,4.43,'B2.5IV','lyr','revise'],
+  ['',18.740,39.61,4.59,'A8Vn','lyr','supervise'],
+  ['',18.739,39.67,4.67,'F1V','lyr','television'],
+  ['',18.768,26.66,4.83,'K3III','lyr','vivid'],
+];
+
+// 真实生成数据优先（build-galaxy.js 产出：2865 词，锚定真实星位与真实词频）
+if(typeof GALAXY_STARS!=='undefined' && GALAXY_STARS.length){
+  STARS = GALAXY_STARS; FAM = GALAXY_FAM; FAMCOL = GALAXY_FAMCOL;
+}
+
+// ---------- 基础场景 ----------
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 1, 6000);
+// 近邻特写相机：站在天球中心朝这颗星看——方位保持真实，只是把这一小片天区放大
+const camFocus = new THREE.PerspectiveCamera(40, 1, 1, 6000);
+// 近邻模式的特写视角：可拖拽环顾、滚轮缩放（focusFov=0 表示交给 fitBounds 自动定）
+let focusTh=0.7, focusPh=1.15, focusFov=0;
+const FOCUS_T = new THREE.Vector3();
+const R = 600; // 真实亮星所在天球半径
+
+function radec(rh, dd, r){
+  const ra = rh*15*Math.PI/180, dec = dd*Math.PI/180;
+  return new THREE.Vector3(
+    r*Math.cos(dec)*Math.cos(ra),
+    r*Math.sin(dec),
+    r*Math.cos(dec)*Math.sin(ra)
+  );
+}
+function specColor(s){
+  if(!s) return new THREE.Color(0xffffff);
+  if(s[0]==='#') return new THREE.Color(s);   // HYG 真实颜色（由真实光谱型算出）
+  const m={O:0x9bb0ff,B:0xaabfff,A:0xcad7ff,F:0xf8f7ff,G:0xfff2c4,K:0xffd2a1,M:0xff9d6b};
+  return new THREE.Color(m[s[0]]||0xffffff);
+}
+function glowTex(){
+  const c=document.createElement('canvas');c.width=c.height=128;
+  const g=c.getContext('2d');
+  const gr=g.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,255,1)');
+  gr.addColorStop(.18,'rgba(255,255,255,.85)');
+  gr.addColorStop(.45,'rgba(255,255,255,.28)');
+  gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=gr;g.fillRect(0,0,128,128);
+  return new THREE.CanvasTexture(c);
+}
+const TEX = glowTex();
+const fadeItems = []; // 全局淡入：背景/银河/星云统一开场渐显
+
+// ---------- 背景真星空（未点亮之储备） ----------
+(function background(){
+  const R0=1850;
+  const stars = (typeof HYG_STARS!=='undefined' && HYG_STARS.length) ? HYG_STARS : null;
+  if(stars){
+    // 真实星表：按星等分三档尺寸，营造"越亮越大"的层级
+    const buckets=[[2.0,4.0],[4.0,2.3],[7.0,1.3]];
+    buckets.forEach(([mm,sz])=>{
+      const ps=[], cs=[], tint=new THREE.Color();
+      for(const s of stars){
+        if(s[2]>mm) continue;
+        const p=radec(s[0], s[1], R0);
+        ps.push(p.x,p.y,p.z);
+        tint.setHex(s[3]); cs.push(tint.r,tint.g,tint.b);
+      }
+      const g=new THREE.BufferGeometry();
+      g.setAttribute('position',new THREE.Float32BufferAttribute(ps,3));
+      g.setAttribute('color',new THREE.Float32BufferAttribute(cs,3));
+      const m=new THREE.PointsMaterial({size:sz,sizeAttenuation:true,vertexColors:true,
+        transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false});
+      scene.add(new THREE.Points(g,m)); fadeItems.push({mat:m,base:.85});
+    });
+  } else {
+    // 兜底：程序生成（未提供 HYG 时）
+    const N=4600, pos=new Float32Array(N*3), col=new Float32Array(N*3);
+    const tint=new THREE.Color();
+    for(let i=0;i<N;i++){
+      const u=Math.random()*2-1, t=Math.random()*Math.PI*2, s=Math.sqrt(1-u*u);
+      const r=1800+Math.random()*420;
+      pos[i*3]=r*s*Math.cos(t); pos[i*3+1]=r*u; pos[i*3+2]=r*s*Math.sin(t);
+      tint.setHSL(0.58+Math.random()*0.08, 0.5, 0.55+Math.random()*0.35);
+      col[i*3]=tint.r; col[i*3+1]=tint.g; col[i*3+2]=tint.b;
+    }
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    g.setAttribute('color',new THREE.BufferAttribute(col,3));
+    const m=new THREE.PointsMaterial({size:2.3,sizeAttenuation:true,vertexColors:true,
+      transparent:true,opacity:.8,blending:THREE.AdditiveBlending,depthWrite:false});
+    scene.add(new THREE.Points(g,m)); fadeItems.push({mat:m,base:.8});
+  }
+})();
+
+// ---------- 银河带 + 星云（深空不再全黑） ----------
+(function cosmos(){
+  const np = radec(192.859/15, 27.128, 1).normalize();
+  const up = Math.abs(np.y)>0.9 ? new THREE.Vector3(1,0,0) : new THREE.Vector3(0,1,0);
+  const u = new THREE.Vector3().crossVectors(np,up).normalize();
+  const v = new THREE.Vector3().crossVectors(np,u).normalize();
+  // 银道面高密度粒子带（银河系主体）
+  const MW=13000, p=new Float32Array(MW*3), c=new Float32Array(MW*3), tint=new THREE.Color();
+  for(let i=0;i<MW;i++){
+    const lon=Math.random()*Math.PI*2;
+    const ang=(Math.random()+Math.random()+Math.random()+Math.random()-2)*0.33;
+    const r=1500+Math.random()*180;
+    const cx=Math.cos(ang)*Math.cos(lon), cy=Math.cos(ang)*Math.sin(lon), cz=Math.sin(ang);
+    p[i*3]=(u.x*cx+v.x*cy+np.x*cz)*r;
+    p[i*3+1]=(u.y*cx+v.y*cy+np.y*cz)*r;
+    p[i*3+2]=(u.z*cx+v.z*cy+np.z*cz)*r;
+    const warm=Math.random()<0.16;
+    tint.setHSL(warm?0.08:0.58+Math.random()*0.06, warm?0.5:0.55, 0.7+Math.random()*0.25);
+    c[i*3]=tint.r; c[i*3+1]=tint.g; c[i*3+2]=tint.b;
+  }
+  const gm=new THREE.BufferGeometry();
+  gm.setAttribute('position',new THREE.BufferAttribute(p,3));
+  gm.setAttribute('color',new THREE.BufferAttribute(c,3));
+  const mwMat=new THREE.PointsMaterial({size:1.9,sizeAttenuation:true,vertexColors:true,
+    transparent:true,opacity:.58,blending:THREE.AdditiveBlending,depthWrite:false});
+  scene.add(new THREE.Points(gm,mwMat)); fadeItems.push({mat:mwMat,base:.58});
+  // 银晕：更宽更暗的弥散层，撑出星系厚度
+  const HALO=5000, hp=new Float32Array(HALO*3), hc=new Float32Array(HALO*3);
+  for(let i=0;i<HALO;i++){
+    const lon=Math.random()*Math.PI*2;
+    const ang=(Math.random()+Math.random()+Math.random()+Math.random()-2)*0.62;
+    const r=1500+Math.random()*200;
+    const cx=Math.cos(ang)*Math.cos(lon), cy=Math.cos(ang)*Math.sin(lon), cz=Math.sin(ang);
+    hp[i*3]=(u.x*cx+v.x*cy+np.x*cz)*r;
+    hp[i*3+1]=(u.y*cx+v.y*cy+np.y*cz)*r;
+    hp[i*3+2]=(u.z*cx+v.z*cy+np.z*cz)*r;
+    tint.setHSL(0.6,0.5,0.55+Math.random()*0.2);
+    hc[i*3]=tint.r; hc[i*3+1]=tint.g; hc[i*3+2]=tint.b;
+  }
+  const hgm=new THREE.BufferGeometry();
+  hgm.setAttribute('position',new THREE.BufferAttribute(hp,3));
+  hgm.setAttribute('color',new THREE.BufferAttribute(hc,3));
+  const haloMat=new THREE.PointsMaterial({size:1.5,sizeAttenuation:true,vertexColors:true,
+    transparent:true,opacity:.22,blending:THREE.AdditiveBlending,depthWrite:false});
+  scene.add(new THREE.Points(hgm,haloMat)); fadeItems.push({mat:haloMat,base:.22});
+  // 银心辉光：指向真实人马座方向（银河系最明亮处）
+  const gc=radec(266.405/15,-28.936,1600);
+  const coreSp=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX,color:0xfff1d6,
+    transparent:true,opacity:.085,blending:THREE.AdditiveBlending,depthWrite:false}));
+  coreSp.scale.set(820,820,1); coreSp.position.copy(gc); scene.add(coreSp);
+  fadeItems.push({mat:coreSp.material,base:.085});
+  // 银辉：沿带撒大柔光斑
+  for(let i=0;i<26;i++){
+    const lon=Math.random()*Math.PI*2;
+    const ang=(Math.random()+Math.random()+Math.random()+Math.random()-2)*0.22;
+    const r=1480+Math.random()*160;
+    const cx=Math.cos(ang)*Math.cos(lon), cy=Math.cos(ang)*Math.sin(lon), cz=Math.sin(ang);
+    const pos=new THREE.Vector3((u.x*cx+v.x*cy+np.x*cz)*r,(u.y*cx+v.y*cy+np.y*cz)*r,(u.z*cx+v.z*cy+np.z*cz)*r);
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX,color:Math.random()<0.2?0xffe6c0:0xbcd2ff,
+      transparent:true,opacity:.06,blending:THREE.AdditiveBlending,depthWrite:false}));
+    const sz=320+Math.random()*420; sp.scale.set(sz,sz,1); sp.position.copy(pos); scene.add(sp);
+    fadeItems.push({mat:sp.material,base:.06});
+  }
+  // 星云：几片大色块打破纯黑
+  const neb=[[0x2a4cff,7],[0xff4f9e,5],[0x2affc0,4],[0x6f3cff,4]];
+  for(const nc of neb) for(let i=0;i<nc[1];i++){
+    const u1=Math.random()*2-1, t=Math.random()*Math.PI*2, s=Math.sqrt(1-u1*u1);
+    const r=1700+Math.random()*220;
+    const pos=new THREE.Vector3(r*s*Math.cos(t), r*u1, r*s*Math.sin(t));
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX,color:nc[0],
+      transparent:true,opacity:.05,blending:THREE.AdditiveBlending,depthWrite:false}));
+    const sz=600+Math.random()*620; sp.scale.set(sz,sz,1); sp.position.copy(pos); scene.add(sp);
+    fadeItems.push({mat:sp.material,base:.05});
+  }
+})();
+
+// ---------- 真实亮星 + 词标签 ----------
+const labelsBox = document.getElementById('labels');
+const focusBox = document.getElementById('focus');
+const coordBox = document.getElementById('coord');
+const wordStars = [];   // {pos, glow, core, base, word, fam, con, scale, hit}
+const hitMeshes = [];
+const sphereGeo = new THREE.SphereGeometry(1,10,10);
+
+STARS.forEach((s,idx)=>{
+  const [name,rh,dd,mag,spec,con,word]=s;
+  const pos = radec(rh,dd,R);
+  const col = specColor(spec);
+  const size = Math.max(9, Math.min(60, (4.2-mag)*7)); // 星等→尺寸
+  // 外辉光
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map:TEX, color:col, transparent:true, opacity:.9,
+    blending:THREE.AdditiveBlending, depthWrite:false
+  }));
+  glow.scale.set(size*2.1, size*2.1, 1); glow.position.copy(pos);
+  scene.add(glow);
+  // 内核
+  const core = new THREE.Sprite(new THREE.SpriteMaterial({
+    map:TEX, color:0xffffff, transparent:true, opacity:.95,
+    blending:THREE.AdditiveBlending, depthWrite:false
+  }));
+  core.scale.set(size*0.7, size*0.7, 1); core.position.copy(pos);
+  // 辉光贴图中心本就是白核，core 不再单独入场景（省一半 draw call）
+  // 点击命中体
+  const hit = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({
+    transparent:true, opacity:0, depthWrite:false
+  }));
+  hit.scale.setScalar(size*1.1); hit.position.copy(pos);
+  // 命中体只用于射线拾取，不进场景（不产生 draw call）
+  hit.userData.idx = idx; hit.updateMatrixWorld(); hitMeshes.push(hit);
+  // 词标签
+  const lab = document.createElement('div');
+  lab.className='lab'; lab.textContent = (word==='i'?'🜨 ':'')+word;
+  lab.addEventListener('click',()=>select(idx));
+  lab.addEventListener('mouseenter',()=>hover(idx));
+  lab.addEventListener('mouseleave',()=>hover(-1));
+  labelsBox.appendChild(lab);
+
+  // 基础亮度 = 真实词频（PRD：最亮区 = 公理层，这是数据事实，不是设计选择）
+  const dw=(typeof LINGO_WORDS!=='undefined')?(LINGO_WORDS[word]||{}):{};
+  const fq0=parseInt(dw.frq,10)||0;
+  const lum = fq0>0 ? Math.max(0.4, Math.min(1.0, 1.05 - Math.log10(fq0+1)/6)) : 0.55;
+  wordStars.push({pos, glow, core, base:size, word, fam:FAM[con].root,
+    con, name, scale:1, lab, hit, lum, isEarth:(word==='i'),
+    tw:Math.random()*6.283, twsp:0.5+Math.random()*1.3,
+    t0:Math.max(0,Math.min(1.7,((mag-(-1.5))/(4.0-(-1.5)))*1.7))});
+});
+// 小烂漫：记录地球（I）的位置与序号——给它一枚常驻光晕，并让它恒显为「你在这里」
+let earthPos=null, earthIdx=-1;
+wordStars.forEach((s,k)=>{ if(s.isEarth){ earthPos=s.pos.clone(); earthIdx=k; } });
+
+// ---------- 选中定位环：让眼睛立刻锁定那颗星 ----------
+const RINGTEX=(function(){
+  const c=document.createElement('canvas');c.width=c.height=256;
+  const g=c.getContext('2d');
+  const gr=g.createRadialGradient(128,128,54,128,128,128);
+  gr.addColorStop(0,'rgba(255,255,255,0)');
+  gr.addColorStop(.52,'rgba(255,255,255,.95)');
+  gr.addColorStop(.70,'rgba(255,255,255,.30)');
+  gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=gr; g.beginPath(); g.arc(128,128,128,0,6.2832); g.fill();
+  return new THREE.CanvasTexture(c);
+})();
+const selRing=new THREE.Sprite(new THREE.SpriteMaterial({map:RINGTEX,transparent:true,opacity:0,
+  blending:THREE.AdditiveBlending,depthWrite:false}));
+scene.add(selRing);
+// 小烂漫：地球（I）常驻淡蓝光晕——你始终在这里
+let earthGlow=null;
+if(earthPos){
+  earthGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:RINGTEX,color:0x7fd8ff,transparent:true,opacity:.4,blending:THREE.AdditiveBlending,depthWrite:false}));
+  earthGlow.position.copy(earthPos); earthGlow.scale.setScalar(48);
+  scene.add(earthGlow);
+}
+// 词源光环：选中定理层词时，把整支同根词族连成一圈淡色光环（呼应「星座连线即词源维度」）
+const famGeo=new THREE.BufferGeometry();
+const famRing=new THREE.Line(famGeo, new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
+scene.add(famRing);
+function buildFamRing(con){
+  const pts=wordStars.filter(s=>s.con===con).map(s=>s.pos.clone());
+  if(pts.length<3){ famGeo.setFromPoints(pts.length?pts.concat([pts[0]]):[]); return; }
+  const c=new THREE.Vector3(); pts.forEach(p=>c.add(p)); c.multiplyScalar(1/pts.length);
+  const n=c.clone().normalize(), ref=pts[0].clone().sub(c);
+  pts.sort((a,b)=>Math.atan2(n.dot(a.clone().sub(c).cross(ref)),a.clone().sub(c).dot(ref))
+                 -Math.atan2(n.dot(b.clone().sub(c).cross(ref)),b.clone().sub(c).dot(ref)));
+  famGeo.setFromPoints(pts.concat([pts[0]]));
+}
+
+// ---------- 星座连线（词源维度） ----------
+Object.keys(FAM).forEach(con=>{
+  if(con==='mw') return;   // 公理层不可分析，不连线：银河是一条带，不是结构链
+  const pts = STARS.map((s,i)=>({s,i})).filter(o=>o.s[5]===con).map(o=>wordStars[o.i].pos);
+  if(pts.length<2) return;
+  const g=new THREE.BufferGeometry().setFromPoints(pts);
+  const line=new THREE.Line(g,new THREE.LineBasicMaterial({
+    color:FAMCOL[con], transparent:true, opacity:0,
+    blending:THREE.AdditiveBlending, depthWrite:false
+  }));
+  line.userData.con=con; scene.add(line);
+});
+const allLines = scene.children.filter(o=>o.isLine);
+
+// ---------- 相机控制（球坐标环绕） ----------
+const cam = {r:1500, th:0.7, ph:1.15};
+const camT= {r:1500, th:0.7, ph:1.15};
+function applyCam(){
+  camera.position.set(
+    cam.r*Math.sin(cam.ph)*Math.cos(cam.th),
+    cam.r*Math.cos(cam.ph),
+    cam.r*Math.sin(cam.ph)*Math.sin(cam.th)
+  );
+  camera.lookAt(0,0,0);
+}
+let dragging=false, px=0, py=0, moved=false, lastInteract=performance.now();
+canvas.addEventListener('pointerdown',e=>{dragging=true;moved=false;px=e.clientX;py=e.clientY;lastInteract=performance.now();document.body.classList.add('drag');});
+addEventListener('pointerup',e=>{dragging=false;document.body.classList.remove('drag');
+  if(!moved && e.target===canvas) pick(e);});
+addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  const dx=e.clientX-px, dy=e.clientY-py; px=e.clientX;py=e.clientY;
+  lastInteract=performance.now();
+  if(Math.abs(dx)+Math.abs(dy)>3) moved=true;
+  if(sel>=0){                       // 近邻模式：拖拽 = 环顾这片天区
+    focusTh -= dx*0.005; focusPh -= dy*0.005;
+    focusPh = Math.max(0.08, Math.min(Math.PI-0.08, focusPh));
+  } else {
+    camT.th -= dx*0.005; camT.ph -= dy*0.005;
+    camT.ph = Math.max(0.08, Math.min(Math.PI-0.08, camT.ph));
+  }
+});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  lastInteract=performance.now();
+  if(sel>=0){                       // 近邻模式：滚轮 = 缩放这片天区
+    const cur=(focusFov>0)?focusFov:camFocus.fov;
+    focusFov=Math.max(8, Math.min(75, cur*(e.deltaY>0?1.12:0.89)));
+  } else {
+    camT.r *= (1 + (e.deltaY>0?0.08:-0.08));
+    camT.r = Math.max(220, Math.min(3200, camT.r));
+  }
+},{passive:false});
+
+// ---------- 拾取 / 选中 ----------
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+function pick(e){
+  ndc.x=(e.clientX/innerWidth)*2-1; ndc.y=-(e.clientY/innerHeight)*2+1;
+  ray.setFromCamera(ndc,(sel>=0)?camFocus:camera);   // 近邻模式下按特写相机拾取
+  const hit=ray.intersectObjects(hitMeshes,false)[0];
+  if(hit) select(hit.object.userData.idx);
+  else if(sel>=0) exitFocus();   // 点空白处 = 返回全景（卡片无关闭按钮，出口留在画面本身）
+}
+// 返回全景：结束这一条漂流路径（跳数清零，下次从头计）
+function exitFocus(){
+  sel=-1; selNei=[]; selNeiSet=new Set(); hops=0;
+  document.getElementById('panel').classList.remove('show');
+  focusBox.classList.remove('show'); labelsBox.classList.remove('closeup');
+  wordStars.forEach(s=>s.lab.classList.remove('on'));
+  document.getElementById('pFamList').classList.remove('show');
+}
+// 真实天球单位向量（用于按真实角距取近邻）
+const U = wordStars.map(s=>s.pos.clone().normalize());
+let sel=-1, hov=-1, selNei=[], selNeiSet=new Set(), selFit=6, hops=0;
+// 选中星 -> 近邻的连线：这些是"下一步可以去的地方"
+const neiGeo=new THREE.BufferGeometry();
+const neiLine=new THREE.LineSegments(neiGeo,new THREE.LineBasicMaterial({
+  color:0xfff1d6, transparent:true, opacity:0,
+  blending:THREE.AdditiveBlending, depthWrite:false}));
+scene.add(neiLine);
+function hover(i){ hov=i; }
+function select(i){
+  if(sel>=0 && sel!==i) hops++;   // 从一颗星跳到另一颗 = 一跳；停下是正当终点，系统不提示
+  sel=i;
+  const st=wordStars[i];
+  // 不转相机：转了头晕。被点中的星本来就来自屏幕可见处，它就在眼前。
+  // 取真实天球上角距最近的 6 颗 = 相邻最密的那几颗，它们就是"下一步"
+  // 邻居 = 语言学上的相邻：同词族（同根）优先。同族本就聚在同一片天区，所以位置近=同根。
+  // 公理层没有词根，退回银河里的几何近邻（PRD：公理层不可分析，不做探索）
+  const a=U[i], myCon=STARS[i][5], same=[], other=[];
+  for(let j=0;j<wordStars.length;j++){
+    if(j===i) continue;
+    const d=a.dot(U[j]);
+    if(myCon!=='mw' && wordStars[j].con===myCon) same.push([d,j]);
+    else other.push([d,j]);
+  }
+  same.sort((x,y)=>y[0]-x[0]); other.sort((x,y)=>y[0]-x[0]);
+  const arr=same.concat(other);
+  selNei=arr.slice(0,6).map(o=>o[1]); selNeiSet=new Set(selNei);
+  // fitBounds：记下最远近邻的真实角距，视野据此自适应（近邻始终舒适地落在屏内）
+  selFit=Math.acos(Math.max(-1,Math.min(1,arr[5][0])))*180/Math.PI;
+  // 特写视角对准这颗星；每次跳转都恢复自动视野（重新 fit，保证这一步看得清）
+  const pn=wordStars[i].pos.clone().normalize();
+  focusPh=Math.acos(Math.max(-1,Math.min(1,pn.y)));
+  focusTh=Math.atan2(pn.z,pn.x);
+  focusFov=0;
+  neiGeo.setFromPoints(selNei.reduce((p,j)=>(p.push(st.pos,wordStars[j].pos),p),[]));
+  const d=LINGO_WORDS[st.word]||{};
+  document.getElementById('pFam').textContent = FAM[st.con].cn+' · '+st.fam;
+  document.getElementById('pWord').textContent = st.word;
+  const ph=(d.ph&&d.ph.length>2)?d.ph:'';
+  document.getElementById('pPh').textContent = ph?('/'+ph+'/'):'';
+  document.getElementById('pCn').textContent = d.cn||'（暂无释义）';
+  const fq=d.frq?('#'+d.frq):'—';
+  document.getElementById('pMeta').innerHTML =
+    '星座：<b>'+FAM[st.con].cn+'</b><br>词族：<b>'+st.fam+'</b>'+
+    '<br>词频排名：<b>'+fq+'</b>（越小越常用）<br>星等：<b>'+STARS[i][3]+'</b>';
+  document.getElementById('panel').classList.add('show');
+  focusBox.dataset.tip = (STARS[i][5]==='mw')
+    ? '银河近邻 · 点亮的词可继续跳转　✕ 返回全景'
+    : '同根词族 · 点亮的词可继续跳转　✕ 返回全景';
+  focusBox.classList.add('show'); labelsBox.classList.add('closeup');
+  wordStars.forEach((s,k)=>s.lab.classList.toggle('on',k===i));
+  // 小烂漫：I 即地球——卡片不放释义，只放这句话
+  if(st.word==='i'){
+    document.getElementById('pFam').textContent='🜨 地球 · 观察者自身';
+    document.getElementById('pWord').textContent='I';
+    document.getElementById('pPh').textContent='';
+    document.getElementById('pCn').textContent='你。天球的中心是你脚下的地球——整片银河，都是你抬眼所见的语言星河。它是「我」，所有词皆由这个「我」说出。';
+    document.getElementById('pMeta').innerHTML='星座：<b>公理层 · 银河带</b><br>身份：<b>观察者 / 自我</b><br>词频：<b>最高频</b><br>星等：<b>'+STARS[i][3]+'</b>';
+    focusBox.dataset.tip='你即地球 · 点亮的词可继续跳转　✕ 返回全景';
+  }
+  // 学习层：同根词族成员列表——点中一词，顺着词根游览同族（闭环）
+  const fl=document.getElementById('pFamList');
+  if(st.con==='mw'){ fl.classList.remove('show'); fl.innerHTML=''; }
+  else {
+    const mem=wordStars.map((s,k)=>({w:s.word,k})).filter(o=>o.k!==i && wordStars[o.k].con===st.con)
+      .sort((a,b)=>_frqOf(a.w)-_frqOf(b.w));
+    // 光环可见但折叠（PRD：点开才展开）——先给你这圈的名字，想逛再打开
+    fl.innerHTML='<div class="ttl" id="famToggle" style="cursor:pointer">词源光环 · '+mem.length+' 个同根词 ▸ 点开</div>'+
+      '<div class="famchips" style="display:none">'+mem.slice(0,18).map(o=>'<span class="chip" data-i="'+o.k+'">'+o.w+'</span>').join('')+
+      (mem.length>18?'<span class="more">+'+(mem.length-18)+' 个</span>':'')+'</div>';
+    fl.classList.add('show');
+    const tg=document.getElementById('famToggle'), chipsBox=fl.querySelector('.famchips');
+    tg.addEventListener('click',()=>{
+      const open=chipsBox.style.display!=='none';
+      chipsBox.style.display=open?'none':'flex';
+      tg.textContent='词源光环 · '+mem.length+' 个同根词 '+(open?'▸ 点开':'▾ 收起');
+    });
+    fl.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>select(+c.dataset.i)));
+  }
+  // 词源光环：同根词族在星图上连成一圈淡色光环
+  if(st.con!=='mw'){ buildFamRing(st.con); famRing.material.color.set(FAMCOL[st.con]||0xffffff); }
+  else { famGeo.setFromPoints([]); }
+}
+// ---------- 图例（按「层 + 真实词源色系」，不逐条列举词族） ----------
+(function legend(){
+  const box=document.getElementById('legend');
+  const dot=c=>'<span class="dot" style="color:#'+c.toString(16).padStart(6,'0')+
+    ';background:#'+c.toString(16).padStart(6,'0')+'"></span>';
+  const famN=Object.keys(FAM).filter(c=>c!=='mw').length;
+  let h='';
+  h+='<div class="row">'+dot(FAMCOL.mw||0xfff1d6)+'<b>公理层</b> · 银河带（不可分析）</div>';
+  h+='<div class="row"><b>定理层</b> · 深空 '+famN+' 个词族（可分析）</div>';
+  [['Latin',0xffd27f],['Greek',0x6fd3ff],['Old English',0x9fffcf]].forEach(o=>{
+    h+='<div class="row">'+dot(o[1])+o[0]+'</div>';
+  });
+  box.innerHTML=h;
+})();
+
+// ---------- 数据来源面板 ----------
+(function about(){
+  const btn=document.getElementById('aboutBtn');
+  const el=document.getElementById('about');
+  btn.addEventListener('click',()=>el.classList.toggle('show'));
+  document.getElementById('aClose').addEventListener('click',()=>el.classList.remove('show'));
+})();
+
+// 手气不错：随机漂流（PRD §4.9）。落在哪片天全凭运气，系统不猜你想去哪、也不给建议
+(function lucky(){
+  document.getElementById('luckyBtn').addEventListener('click',()=>{
+    let i; do{ i=Math.floor(Math.random()*wordStars.length); }while(i===sel && wordStars.length>1);
+    select(i);
+  });
+})();
+
+// 常显标签：真实词频最高的 80 个（"你住在银河里"的路标），其余靠悬停/选中显现
+const _frqOf=w=>{const d=(typeof LINGO_WORDS!=='undefined')?(LINGO_WORDS[w]||{}):{};return parseInt(d.frq,10)||9e9;};
+const ALWAYS=new Set(STARS.map((s,i)=>({w:s[6],i})).sort((a,b)=>_frqOf(a.w)-_frqOf(b.w)).slice(0,80).map(o=>o.i));
+if(earthIdx>=0) ALWAYS.add(earthIdx);   // 地球恒显：你始终在星河里
+
+// ---------- 渲染循环 ----------
+let t0=performance.now(), frameN=0;
+function tick(){
+  const el=(performance.now()-t0)/1000;
+  const gfade=Math.min(1, el/2.4);
+  // 近邻模式下压暗星海背景：焦点与近邻浮出，其余退为背景
+  fadeItems.forEach(o=>o.mat.opacity=o.base*gfade*(sel>=0?0.45:1));
+  if(earthGlow) earthGlow.material.opacity=0.3+0.18*Math.sin(el*1.4);
+  // 空闲慢漂移（如听星际穿越般悬浮）
+  if(sel<0 && performance.now()-lastInteract>3500) camT.th += 0.0006;
+  // 相机缓动
+  cam.r+=(camT.r-cam.r)*0.07; cam.th+=(camT.th-cam.th)*0.07; cam.ph+=(camT.ph-cam.ph)*0.07;
+  applyCam();
+  // 近邻模式：先定好特写相机与视野（星点大小依赖 selView，必须算在前面）
+  let camNow=camera, selView=0;
+  if(sel>=0){
+    const asp=innerWidth/innerHeight, need=selFit*1.5;
+    let fov=(asp>=1)?2*need:2*Math.atan(Math.tan(need*Math.PI/180)/asp)*180/Math.PI;
+    if(focusFov>0) fov=focusFov;                       // 用户手动缩放过就用他的
+    else focusFov=0;
+    camFocus.fov=Math.max(8, Math.min(75, fov));
+    camFocus.aspect=asp; camFocus.updateProjectionMatrix();
+    camFocus.position.set(0,0,0);
+    camFocus.lookAt(FOCUS_T.set(
+      Math.sin(focusPh)*Math.cos(focusTh),
+      Math.cos(focusPh),
+      Math.sin(focusPh)*Math.sin(focusTh)
+    ).multiplyScalar(R));
+    camFocus.updateMatrixWorld();
+    camNow=camFocus;
+    selView=2*R*Math.tan(camFocus.fov*Math.PI/360);    // 该视野对应的世界高度
+  }
+  // 星点：开场按亮度依次点亮 + 微闪 + 选中/悬停放大 + 同族高亮
+  const selCon = sel>=0?wordStars[sel].con:null;
+  const famT=(sel>=0 && selCon!=='mw')?0.5:0;
+  famRing.material.opacity += (famT-famRing.material.opacity)*0.12;
+  const pulse=0.5+0.5*Math.sin(el*3.2);
+  wordStars.forEach((s,i)=>{
+    let k=1;
+    if(i===hov) k*=1.22;
+    if(sel>=0){
+      // 焦点最大 / 真实近邻亮起（可跳过去）/ 其余主动让位，否则密星海会盖住焦点
+      // 按屏幕占比反推放大倍数：永远看得清，又不会大到糊成一团（星等差异仍保留）
+      const sn=Math.max(0,Math.min(1,(s.base-9)/31));
+      if(i===sel) k=(selView*(0.24+0.12*sn))/(s.base*2.1)*(1+0.12*Math.sin(el*3.2));
+      else if(selNeiSet.has(i)) k=(selView*(0.10+0.06*sn))/(s.base*2.1);
+      else if(selCon && s.con===selCon) k=1.25;
+      else k=0.75;
+    }
+    s.scale += (k - s.scale)*0.15;
+    const fin=Math.min(1, Math.max(0,(el-s.t0)/0.9));
+    const tw=0.82+0.18*Math.sin(el*s.twsp+s.tw);
+    const b=s.base*s.scale*fin;
+    s.glow.scale.set(b*2.1,b*2.1,1);
+    s.core.scale.set(b*0.7,b*0.7,1);
+    let op=0.9*s.lum*fin*tw;
+    if(sel>=0){
+      if(i===sel) op=Math.min(1, op*1.5+0.35);
+      else if(selNeiSet.has(i)) op=Math.min(1, op*1.7);
+      else if(selCon && s.con===selCon) op*=1.2;
+      else op*=0.3;
+    }
+    s.glow.material.opacity=op;
+    s.core.material.opacity=0.95*fin*tw;
+  });
+  // 定位环 + 近邻连线
+  if(sel>=0){
+    const st=wordStars[sel];
+    selRing.position.copy(st.pos);
+    const rs=st.base*(11.0+2.4*pulse);
+    selRing.scale.set(rs,rs,1);
+    selRing.material.color.setHex(FAMCOL[st.con]||0xffffff);
+    selRing.material.opacity=0.4+0.5*pulse;
+    neiLine.material.opacity += (0.55 - neiLine.material.opacity)*0.15;
+  } else {
+    selRing.material.opacity=0;
+    neiLine.material.opacity += (0 - neiLine.material.opacity)*0.15;
+  }
+  // 连线高亮
+  allLines.forEach(l=>{
+    const base=(selCon && l.userData.con===selCon)?0.95:0.22;
+    l.material.opacity += (base*gfade - l.material.opacity)*0.1;
+  });
+  // 标签投影：默认只露最高频的一小批，其余在悬停/选中时显现（宏观拥挤、点开空旷）
+  const W=innerWidth,H=innerHeight;
+  // 1) 收集候选（只收在屏幕内的）
+  const cands=[];
+  wordStars.forEach((s,i)=>{
+    // 全景只露最高频路标；近邻模式只露这颗星与它的真实近邻
+    const vis = (sel>=0) ? (i===sel || selNeiSet.has(i)) : (ALWAYS.has(i) || i===hov);
+    if(!vis){ if(s.lab.style.display!=='none') s.lab.style.display='none'; return; }
+    const v=s.pos.clone().project(camNow);
+    if(v.z>1){ s.lab.style.display='none'; return; }
+    cands.push({i,s,v});
+  });
+  // 2) 优先级：选中 > 悬停 > 近邻 > 真实词频（越常用的词越先占位）
+  cands.sort((a,b)=>{
+    const pr=o=>(o.i===sel?0:o.i===hov?1:selNeiSet.has(o.i)?2:3);
+    const d=pr(a)-pr(b);
+    return d?d:(_frqOf(a.s.word)-_frqOf(b.s.word));
+  });
+  // 3) 像地图 POI 一样避让放置：挤不下就让位，密集区自然只留最重要的
+  const FS=(sel>=0)?21:13, placed=[];
+  for(const c of cands){
+    const dist=camNow.position.distanceTo(c.s.pos);
+    const sc=(sel>=0) ? 1.25 : Math.max(.62, Math.min(1.35, 230/dist));
+    // 特写里标签落在星下方，避免文字压在星点上读不清
+    const x=(c.v.x*0.5+0.5)*W, y=(-c.v.y*0.5+0.5)*H+((sel>=0)?26*sc:0);
+    const w=c.s.word.length*FS*0.58*sc+12, h=FS*1.55*sc;
+    let clash=false;
+    for(const p of placed){
+      if(Math.abs(x-p.x)<(w+p.w)*0.5 && Math.abs(y-p.y)<(h+p.h)*0.55){ clash=true; break; }
+    }
+    if(clash){ c.s.lab.style.display='none'; continue; }
+    placed.push({x,y,w,h});
+    c.s.lab.style.display='block';
+    c.s.lab.style.transform=`translate(-50%,-50%) translate(${x}px,${y}px) scale(${sc})`;
+  }
+  renderer.setViewport(0,0,innerWidth,innerHeight);
+  renderer.render(scene, (sel>=0)?camFocus:camera);   // 选中=全屏近邻模式，否则银河全景
+  // 天区坐标常驻：全景=视线中心所在天区，近邻模式=这颗星所在天区
+  if((frameN=(frameN+1)%8)===0){
+    const d=(sel>=0) ? wordStars[sel].pos : camera.position.clone().negate();
+    const u2=(d.lengthSq()?d:new THREE.Vector3(0,0,-1)).normalize();
+    const dec=Math.asin(Math.max(-1,Math.min(1,u2.y)))*180/Math.PI;
+    let ra=Math.atan2(u2.z,u2.x)*12/Math.PI; if(ra<0)ra+=24;
+    let c='天区 RA '+ra.toFixed(1)+'h · Dec '+(dec>=0?'+':'')+dec.toFixed(0)+'°';
+    if(sel>=0){
+      c+=' · 跳 '+hops;
+      if(wordStars[sel].con!=='mw'){ const rt=wordStars[sel].fam.split(' ')[0]; if(rt) c+=' · ↑'+rt; }
+    }
+    coordBox.textContent=c;
+  }
+  requestAnimationFrame(tick);
+}
+tick();
+
+addEventListener('resize',()=>{
+  renderer.setSize(innerWidth,innerHeight);
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+});
+</script>
+</body>
+</html>
