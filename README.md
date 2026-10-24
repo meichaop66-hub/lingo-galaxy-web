@@ -8,7 +8,7 @@
 
 本仓库是 GitHub Pages 的**公开静态发布仓**，不是日常开发真源。
 
-- **产品需求、开发源文件、数据与发布脚本**：位于 [lingo-galaxy](https://github.com/meichaop66-hub/lingo-galaxy)。
+- **产品需求、开发源文件、数据与发布脚本**：位于私有源仓 [lingo-galaxy](https://github.com/meichaop66-hub/lingo-galaxy)（仅授权维护者可访问）。
 - **微信小程序原生适配**：位于 [lingo-galaxy-mp](https://github.com/meichaop66-hub/lingo-galaxy-mp)。
 - **发布流程**：由源仓的 `publish.ps1` 同步指定发布文件；发布前保留检查与验收，不以每次提交自动上线替代发布闸。
 
