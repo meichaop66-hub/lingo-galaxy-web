@@ -1,0 +1,63 @@
+name: Web 发布版问题反馈
+description: 报告语言银河 Web 发布版的可复现问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请优先确认问题发生在公开 Web 发布版。产品需求和源文件位于 [lingo-galaxy](https://github.com/meichaop66-hub/lingo-galaxy)；本仓库是静态发布产物。
+  - type: input
+    id: page_url
+    attributes:
+      label: 出问题的页面 URL
+      description: 请提供可以复现问题的页面地址。
+      placeholder: "https://meichaop66-hub.github.io/lingo-galaxy-web/"
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: 浏览器 / 运行环境
+      options:
+        - Chrome
+        - Edge
+        - Firefox
+        - Safari
+        - WeChat WebView
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 按顺序列出操作，尽量提供最短复现路径。
+      placeholder: |
+        1. 打开……
+        2. 点击……
+        3. 观察……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+      placeholder: 我原本预期……
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      placeholder: 实际发生……
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 截图 / 控制台信息（可选）
+      description: 请移除个人信息、令牌或其他敏感数据后再粘贴。
+      render: text
+    validations:
+      required: false
