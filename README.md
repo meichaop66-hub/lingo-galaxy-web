@@ -21,5 +21,5 @@
 ## 版本与来源
 
 本仓库只包含经挑选的发布文件。产品功能、数据来源、上游依赖与许可信息以源仓的 PRD、选型卡及相关声明为准：
-- [源仓 README](https://github.com/meichaop66-hub/lingo-galaxy/blob/main/README.md)
-- [产品需求文档](https://github.com/meichaop66-hub/lingo-galaxy/blob/main/PRD-%E8%AF%AD%E8%A8%80%E9%93%B6%E6%B2%B3-v1.1.md)
+- [源仓 README（私有，需授权）](https://github.com/meichaop66-hub/lingo-galaxy/blob/main/README.md)
+- [产品需求文档（私有，需授权）](https://github.com/meichaop66-hub/lingo-galaxy/blob/main/PRD-%E8%AF%AD%E8%A8%80%E9%93%B6%E6%B2%B3-v1.1.md)
