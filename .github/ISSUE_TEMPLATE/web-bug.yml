@@ -1,7 +1,6 @@
 name: Web 发布版问题反馈
 description: 报告语言银河 Web 发布版的可复现问题
 title: "[Bug] "
-labels: ["bug"]
 body:
   - type: markdown
     attributes:
