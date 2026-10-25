@@ -25,7 +25,6 @@
 - [源仓 README（私有，需授权）](https://github.com/meichaop66-hub/lingo-galaxy/blob/main/README.md)
 - [产品需求文档（私有，需授权）](https://github.com/meichaop66-hub/lingo-galaxy/blob/main/PRD-%E8%AF%AD%E8%A8%80%E9%93%B6%E6%B2%B3-v1.1.md)
 
-
 ## 文档呈现约定
 
 本仓库作为公开发布入口，README 与发布说明遵循元基仓库的[文档视觉语言与 Markdown 排版基线](https://github.com/meichaop66-hub/yuanji/blob/main/docs/02-%E8%A7%84%E8%8C%83/%E6%96%87%E6%A1%A3%E8%A7%86%E8%A7%89%E8%AF%AD%E8%A8%80%E4%B8%8EMarkdown%E6%8E%92%E7%89%88%E5%9F%BA%E7%BA%BFv1.0.md)。本规范只约束文档呈现，不改变静态发布仓与私有开发真源的边界。
